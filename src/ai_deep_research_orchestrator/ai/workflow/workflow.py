@@ -15,7 +15,7 @@ class PlannerNodeStructuredOutput(BaseModel):
 
 
 class EvaluationAgentStructuredOutput(BaseModel):
-    eval_result : Literal["Yes", "No"] = Field(description="Evaluation result in Yes or No")
+    eval_result : bool = Field(description="Evaluation result in True or False")
 
 
 
@@ -73,8 +73,8 @@ async def researcher_node(state : AgentState) -> AgentState:
 async def evaluation_node(state : AgentState) -> AgentState:
     query = state["query"]
     finding = state["finding"]
-
-    move_to_next_step = state["move_to_next_step"]
+    current_step = state["current_step"]
+    current_step_topic = state["plan"][current_step]
 
     system_message = SystemMessage(content=f"""
     You are the evaluator agent. 
@@ -82,13 +82,14 @@ async def evaluation_node(state : AgentState) -> AgentState:
     You also have researcher agent's finding.
     You have to check if the researcher agent's findings are suitable for the query or not.
     No highest accuracy is needed just check if its relevant or not. 
-    If the finding is relevant reply with "Yes" and if its not then reply with "No"
+    If the finding is relevant reply with "True" and if its not then reply with "False"
     """)
 
 
     human_message = HumanMessage(content=f"""
-    This is the original query of user : {query}
-    This is the researcher agent's finding : {finding}
+    This is the original query of user : {query}.
+    This is the topic of the research : {current_step_topic}.
+    This is the researcher agent's finding : {finding}.
     """)
 
 
@@ -96,8 +97,62 @@ async def evaluation_node(state : AgentState) -> AgentState:
 
     response : EvaluationAgentStructuredOutput = await eval_llm.ainvoke([system_message, human_message])
 
-    return 
 
+    if response.eval_result:
+        return {
+            "move_forward" : True,
+            "current_step" : current_step + 1,
+            "findings" : [finding]
+        } 
+
+
+    return {
+        "move_forward" : False
+
+    }
+    
+
+
+
+
+# ROUTING FUNCTIOMN
+def route_after_evaluation(state : AgentState) -> Literal["researcher_node", "END"]:
+    move_forward = state["move_forward"]
+    current_step = state["current_step"]
+    plan = state["plan"]
+
+    if not move_forward:
+        return "researcher_node"
+
+    if current_step < len(plan):
+        return "researcher_node"
+
+    return "END"
+
+
+
+
+
+# STATEGRAPH
+builder = StateGraph(state_schema=AgentState)
+
+builder.add_node("planner_node", planner_node)
+builder.add_node("researcher_node", researcher_node)
+builder.add_node("evaluation_node", evaluation_node)
+
+
+builder.add_edge(START, "planner_node")
+builder.add_edge("planner_node", "researcher_node")
+builder.add_edge("researcher_node", "evaluation_node")
+
+builder.add_conditional_edges(
+    "evaluation_node",
+    route_after_evaluation,
+    {
+        "researcher_node" : "researcher_node",
+        "END" : END
+    }
+)
 
 
 
