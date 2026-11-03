@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRY_IN_DAYS : int
     ACCESS_TOKEN_ALGORITH : str
 
+    GOOGLE_API_KEY : str
+
 
     model_config = SettingsConfigDict(
         env_file=".env",

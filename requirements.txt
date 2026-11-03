@@ -6,3 +6,7 @@ alembic
 pydantic-settings
 pydantic[Email]
 pwdlib[Argon2]
+
+langgraph
+langchain
+langchain-google-genai
