@@ -6,6 +6,7 @@ from pydantic import Field
 from pydantic import BaseModel
 from langgraph.graph import START, END, StateGraph
 from ai_deep_research_orchestrator.ai.core.state import AgentState
+import asyncio
 
 
 # STRUCTURED OUTPUTS
@@ -48,9 +49,9 @@ async def planner_node(state : AgentState) -> AgentState:
 
 async def researcher_node(state : AgentState) -> AgentState:
     plan = state["plan"]
-    current_step = state["current_step"]
+    iteration = state["iteration"]
 
-    executable_step = plan[current_step]
+    executable_step = plan[iteration]
 
     system_message = SystemMessage(content=f"""
     You are the researcher agent.
@@ -73,8 +74,8 @@ async def researcher_node(state : AgentState) -> AgentState:
 async def evaluation_node(state : AgentState) -> AgentState:
     query = state["query"]
     finding = state["finding"]
-    current_step = state["current_step"]
-    current_step_topic = state["plan"][current_step]
+    iteration = state["current_step"]
+    current_step_topic = state["plan"][iteration]
 
     system_message = SystemMessage(content=f"""
     You are the evaluator agent. 
@@ -100,8 +101,8 @@ async def evaluation_node(state : AgentState) -> AgentState:
 
     if response.eval_result:
         return {
-            "move_forward" : True,
-            "current_step" : current_step + 1,
+            "evaluation" : True,
+            "current_step" : iteration + 1,
             "findings" : [finding]
         } 
 
@@ -114,14 +115,13 @@ async def evaluation_node(state : AgentState) -> AgentState:
 
 
 
-
 # ROUTING FUNCTIOMN
 def route_after_evaluation(state : AgentState) -> Literal["researcher_node", "END"]:
-    move_forward = state["move_forward"]
+    evaluation = state["evaluation"]
     current_step = state["current_step"]
     plan = state["plan"]
 
-    if not move_forward:
+    if not evaluation:
         return "researcher_node"
 
     if current_step < len(plan):
@@ -154,6 +154,33 @@ builder.add_conditional_edges(
     }
 )
 
+
+
+workflow = builder.compile()
+
+
+
+async def run_worklow():
+    initial_state : AgentState = {
+        "query" : "Python vs go salaries",
+        "plan" : [],
+        "iteration" : 0,
+        "finding" : "",
+        "evaluation" : "",
+        "findings" : [],
+        "feedback" : ""
+    }
+
+
+    final_response : AgentState = await workflow.ainvoke(initial_state)
+
+
+    print(final_response)
+
+
+asyncio.run(
+    run_worklow()
+    )
 
 
 

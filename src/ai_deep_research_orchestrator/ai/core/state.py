@@ -7,8 +7,9 @@ from operator import add
 class AgentState(TypedDict):
     query : str
     plan : list[str]
-    current_step : int
+    iteration : int
     finding : str
-    move_forward : bool
+    evaluation : bool
+    feedback : str
     findings : Annotated[list[str], add]
     
